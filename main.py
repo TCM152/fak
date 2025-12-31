@@ -1,0 +1,784 @@
+import subprocess
+import sys
+import site
+
+# Add user site-packages to path (for Cloud Shell)
+user_site = site.getusersitepackages()
+if user_site not in sys.path:
+    sys.path.insert(0, user_site)
+    print(f"[+] Added {user_site} to PATH")
+
+# Auto-install dependencies
+def install_dependencies():
+    """Auto-install required packages"""
+    required_packages = ['seleniumbase']
+    
+    for package in required_packages:
+        try:
+            __import__(package)
+            print(f"[✓] {package} already installed")
+        except ImportError:
+            print(f"[!] Installing {package}...")
+            try:
+                # Install with --user flag for Cloud Shell
+                subprocess.check_call([sys.executable, "-m", "pip", "install", package, "--user", "--quiet"])
+                print(f"[✓] {package} installed successfully")
+                
+                # Reload sys.path after installation
+                import importlib
+                importlib.invalidate_caches()
+                
+            except subprocess.CalledProcessError as e:
+                print(f"[✗] Failed to install {package}: {e}")
+                sys.exit(1)
+
+# Install dependencies first
+install_dependencies()
+
+# Now import the packages
+from seleniumbase import SB
+import time
+import platform
+import random
+import secrets
+import string
+
+TARGET_URL = "https://sfl.gl/8mwXBg2"  
+MAX_STEPS = 25
+
+# Random wait ranges (in seconds) - base values
+WAIT_MIN = 2.5
+WAIT_MAX = 6.0
+SHORT_WAIT_MIN = 0.3
+SHORT_WAIT_MAX = 1.2
+
+def jitter_sleep(base_min, base_max, multiplier=1.0):
+    """Sleep for a randomized duration with extra jitter"""
+    duration = random.uniform(base_min, base_max) * multiplier
+    # Add +/- 15% micro-jitter
+    micro_jitter = duration * random.uniform(-0.15, 0.15)
+    final_duration = max(0.1, duration + micro_jitter)
+    time.sleep(final_duration)
+    return final_duration
+
+
+
+def log(msg, level="INFO"):
+    """Enhanced logging with levels"""
+    prefix = {
+        "INFO": "[*]",
+        "SUCCESS": "[+]",
+        "ERROR": "[!]",
+        "STEP": "[>]",
+        "URL": "[URL]",
+        "ACTION": "[>>]"
+    }
+    print(f"{prefix.get(level, '[*]')} {msg}")
+    sys.stdout.flush()
+
+class FingerprintRandomizer:
+    def __init__(self):
+        self.user_agents = [
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:122.0) Gecko/20100101 Firefox/122.0",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0"
+        ]
+        
+        self.timezones = [
+            "America/New_York", "America/Chicago", "America/Los_Angeles", "America/Denver",
+            "Europe/London", "Europe/Paris", "Europe/Berlin", "Europe/Madrid",
+            "Asia/Tokyo", "Asia/Shanghai", "Asia/Dubai", "Asia/Singapore",
+            "Australia/Sydney", "Pacific/Auckland", "America/Toronto", "America/Mexico_City"
+        ]
+        
+        self.languages = [
+            ["en-US", "en"], ["en-GB", "en"], ["es-ES", "es"], ["fr-FR", "fr"],
+            ["de-DE", "de"], ["it-IT", "it"], ["pt-BR", "pt"], ["ja-JP", "ja"],
+            ["zh-CN", "zh"], ["ko-KR", "ko"], ["ru-RU", "ru"], ["ar-SA", "ar"]
+        ]
+        
+        self.webgl_vendors = [
+            "Google Inc. (NVIDIA)", "Google Inc. (Intel)", "Google Inc. (AMD)",
+            "Google Inc. (NVIDIA Corporation)", "Google Inc. (Intel(R) HD Graphics)",
+            "Google Inc. (AMD Radeon)", "Mozilla (NVIDIA)", "Mozilla (Intel)"
+        ]
+        
+        self.webgl_renderers = [
+            "ANGLE (NVIDIA GeForce RTX 3060 Direct3D11 vs_5_0 ps_5_0)",
+            "ANGLE (Intel(R) UHD Graphics 630 Direct3D11 vs_5_0 ps_5_0)",
+            "ANGLE (AMD Radeon RX 6700 XT Direct3D11 vs_5_0 ps_5_0)",
+            "ANGLE (NVIDIA GeForce GTX 1660 Ti Direct3D11 vs_5_0 ps_5_0)",
+            "ANGLE (Intel(R) Iris(R) Xe Graphics Direct3D11 vs_5_0 ps_5_0)",
+            "ANGLE (AMD Radeon RX 5700 Direct3D11 vs_5_0 ps_5_0)"
+        ]
+        
+        self.screen_resolutions = [
+            (1920, 1080), (2560, 1440), (1366, 768), (1440, 900),
+            (1600, 900), (1680, 1050), (3840, 2160), (2560, 1080)
+        ]
+        
+        self.generate_fingerprint()
+    
+    def generate_fingerprint(self):
+        """Generate random fingerprint data"""
+        self.user_agent = random.choice(self.user_agents)
+        self.timezone = random.choice(self.timezones)
+        self.language = random.choice(self.languages)
+        self.webgl_vendor = random.choice(self.webgl_vendors)
+        self.webgl_renderer = random.choice(self.webgl_renderers)
+        self.screen_width, self.screen_height = random.choice(self.screen_resolutions)
+        self.color_depth = random.choice([24, 32])
+        self.hardware_concurrency = random.choice([2, 4, 6, 8, 12, 16])
+        self.device_memory = random.choice([4, 8, 16, 32])
+        self.canvas_noise = ''.join(random.choices(string.hexdigits, k=16))
+        
+        log(f"Fingerprint: UA={self.user_agent[:50]}...")
+        log(f"Timezone: {self.timezone}, Lang: {self.language[0]}")
+        log(f"WebGL: {self.webgl_vendor} / {self.webgl_renderer[:40]}...")
+        log(f"Screen: {self.screen_width}x{self.screen_height}, Cores: {self.hardware_concurrency}")
+    
+    def get_injection_script(self):
+        """Generate JavaScript to inject fingerprint"""
+        return f"""
+        (function() {{
+            // Override User Agent
+            Object.defineProperty(navigator, 'userAgent', {{
+                get: () => '{self.user_agent}'
+            }});
+            
+            // Override Language
+            Object.defineProperty(navigator, 'language', {{
+                get: () => '{self.language[0]}'
+            }});
+            Object.defineProperty(navigator, 'languages', {{
+                get: () => {self.language}
+            }});
+            
+            // Override Timezone
+            const originalDateTimeFormat = Intl.DateTimeFormat;
+            Intl.DateTimeFormat = function(...args) {{
+                const instance = new originalDateTimeFormat(...args);
+                const originalResolvedOptions = instance.resolvedOptions;
+                instance.resolvedOptions = function() {{
+                    const options = originalResolvedOptions.call(this);
+                    options.timeZone = '{self.timezone}';
+                    return options;
+                }};
+                return instance;
+            }};
+            
+            // Override WebGL
+            const getParameter = WebGLRenderingContext.prototype.getParameter;
+            WebGLRenderingContext.prototype.getParameter = function(parameter) {{
+                if (parameter === 37445) return '{self.webgl_vendor}';
+                if (parameter === 37446) return '{self.webgl_renderer}';
+                return getParameter.call(this, parameter);
+            }};
+            
+            const getParameter2 = WebGL2RenderingContext.prototype.getParameter;
+            WebGL2RenderingContext.prototype.getParameter = function(parameter) {{
+                if (parameter === 37445) return '{self.webgl_vendor}';
+                if (parameter === 37446) return '{self.webgl_renderer}';
+                return getParameter2.call(this, parameter);
+            }};
+            
+            // Override Canvas
+            const originalToDataURL = HTMLCanvasElement.prototype.toDataURL;
+            HTMLCanvasElement.prototype.toDataURL = function(type) {{
+                const dataURL = originalToDataURL.apply(this, arguments);
+                return dataURL + '{self.canvas_noise}';
+            }};
+            
+            const originalToBlob = HTMLCanvasElement.prototype.toBlob;
+            HTMLCanvasElement.prototype.toBlob = function(callback, type, quality) {{
+                originalToBlob.call(this, function(blob) {{
+                    callback(new Blob([blob, '{self.canvas_noise}'], {{type: blob.type}}));
+                }}, type, quality);
+            }};
+            
+            // Override Screen
+            Object.defineProperty(screen, 'width', {{
+                get: () => {self.screen_width}
+            }});
+            Object.defineProperty(screen, 'height', {{
+                get: () => {self.screen_height}
+            }});
+            Object.defineProperty(screen, 'availWidth', {{
+                get: () => {self.screen_width}
+            }});
+            Object.defineProperty(screen, 'availHeight', {{
+                get: () => {self.screen_height - 40}
+            }});
+            Object.defineProperty(screen, 'colorDepth', {{
+                get: () => {self.color_depth}
+            }});
+            Object.defineProperty(screen, 'pixelDepth', {{
+                get: () => {self.color_depth}
+            }});
+            
+            // Override Hardware
+            Object.defineProperty(navigator, 'hardwareConcurrency', {{
+                get: () => {self.hardware_concurrency}
+            }});
+            Object.defineProperty(navigator, 'deviceMemory', {{
+                get: () => {self.device_memory}
+            }});
+            
+            // Override Platform
+            Object.defineProperty(navigator, 'platform', {{
+                get: () => 'Win32'
+            }});
+            
+            console.log('[Fingerprint] Injected successfully');
+        }})();
+        """
+
+
+class SafelinkBypass:
+    def __init__(self, sb):
+        self.sb = sb
+        self.anchor = None
+        self.processed = set()
+        self.fingerprint = FingerprintRandomizer()
+
+    def is_valid_session(self):
+        try:
+            self.sb.driver.current_window_handle
+            return True
+        except:
+            return False
+
+
+
+    def set_anchor(self):
+        try:
+            self.anchor = self.sb.driver.current_window_handle
+            self.processed.add(self.anchor)
+            current_url = self.sb.get_current_url()
+            log(f"Anchor window set: {self.anchor[:8]}...", "SUCCESS")
+            log(f"Current URL: {current_url}", "URL")
+        except Exception as e:
+            log(f"Warning: Could not set anchor - {e}", "ERROR")
+
+    def back_to_anchor(self):
+        if not self.is_valid_session():
+            return
+        try:
+            if self.anchor and self.sb.driver.current_window_handle != self.anchor:
+                self.sb.driver.switch_to.window(self.anchor)
+        except:
+            try:
+                handles = self.sb.driver.window_handles
+                if handles:
+                    for h in handles:
+                        try:
+                            self.sb.driver.switch_to.window(h)
+                            if "sfl.gl" in self.sb.get_current_url():
+                                self.anchor = h
+                                return
+                        except:
+                            continue
+            except:
+                pass
+
+    def handle_popups(self):
+        """Smart popup handling - close NEW popups quickly, especially blank ones"""
+        if not self.is_valid_session():
+            return
+        try:
+            current = self.sb.driver.window_handles
+            new_tabs = [h for h in current if h not in self.processed]
+            if new_tabs:
+                log(f"Detected {len(new_tabs)} new popup(s), processing...", "ACTION")
+                for h in new_tabs:
+                    try:
+                        self.sb.driver.switch_to.window(h)
+                        # Check if page is blank or loading
+                        popup_url = self.sb.get_current_url()
+                        title = self.sb.get_page_title()
+                        
+                        is_blank = "about:blank" in popup_url or not title or title.strip() == ""
+                        
+                        log(f"Popup URL: {popup_url} (Blank: {is_blank})", "URL")
+                        
+                        # If blank, don't wait long
+                        if is_blank:
+                            log("Quick return from blank popup", "INFO")
+                        else:
+                            jitter_sleep(SHORT_WAIT_MIN, SHORT_WAIT_MAX)
+                            
+                        self.processed.add(h)
+                    except:
+                        continue
+                self.back_to_anchor()
+                log("Returned to main window", "SUCCESS")
+            
+            if self.anchor and self.sb.driver.current_window_handle != self.anchor:
+                self.back_to_anchor()
+        except Exception as e:
+            log(f"Error handling popups: {e}", "ERROR")
+            self.back_to_anchor()
+
+    def remove_overlays(self):
+        if not self.is_valid_session():
+            return
+        try:
+            if self.anchor and self.sb.driver.current_window_handle != self.anchor:
+                return
+        except:
+            return
+            
+        js = """
+        try {
+            document.querySelectorAll('ins, iframe[id^="aswift"], div[class*="overlay"], div[class*="popup"]').forEach(el => el.remove());
+            document.querySelectorAll('body > div').forEach(el => {
+                const s = window.getComputedStyle(el);
+                if (el.innerText && el.innerText.includes("OPEN LINK")) return;
+                if ((parseInt(s.zIndex) > 50 || s.position === 'fixed') && el.offsetHeight > window.innerHeight * 0.5) {
+                    el.remove();
+                }
+            });
+            document.body.style.overflow = 'auto';
+        } catch(e) {}
+        """
+        try:
+            self.sb.execute_script(js)
+        except:
+            pass
+
+    def inject_fingerprint(self):
+        """Inject fingerprint randomization script"""
+        if not self.is_valid_session():
+            return
+        try:
+            # First inject stealth script to hide automation
+            stealth_script = """
+            // Hide webdriver
+            Object.defineProperty(navigator, 'webdriver', {
+                get: () => undefined
+            });
+            
+            // Override plugins
+            Object.defineProperty(navigator, 'plugins', {
+                get: () => [1, 2, 3, 4, 5]
+            });
+            
+            // Override permissions
+            const originalQuery = window.navigator.permissions.query;
+            window.navigator.permissions.query = (parameters) => (
+                parameters.name === 'notifications' ?
+                    Promise.resolve({ state: Notification.permission }) :
+                    originalQuery(parameters)
+            );
+            
+            // Chrome runtime
+            window.chrome = {
+                runtime: {}
+            };
+            
+            // Override headless detection
+            Object.defineProperty(navigator, 'maxTouchPoints', {
+                get: () => 1
+            });
+            
+            console.log('[Stealth] Applied anti-detection');
+            """
+            self.sb.execute_script(stealth_script)
+            
+            # Then inject fingerprint
+            script = self.fingerprint.get_injection_script()
+            self.sb.execute_script(script)
+            log("Fingerprint + Stealth injected successfully", "SUCCESS")
+        except Exception as e:
+            log(f"Warning: Could not inject fingerprint - {e}", "ERROR")
+    
+    def cleanup_browser_data(self):
+        """Clean up all browser data for anonymity"""
+        if not self.is_valid_session():
+            return
+        try:
+            log("Cleaning up browser data...")
+            
+            # Clear cookies
+            self.sb.driver.delete_all_cookies()
+            
+            # Clear storage via JavaScript
+            cleanup_script = """
+            try {
+                // Clear localStorage
+                localStorage.clear();
+                
+                // Clear sessionStorage
+                sessionStorage.clear();
+                
+                // Clear IndexedDB
+                if (window.indexedDB && window.indexedDB.databases) {
+                    window.indexedDB.databases().then(dbs => {
+                        dbs.forEach(db => window.indexedDB.deleteDatabase(db.name));
+                    });
+                }
+                
+                console.log('[Cleanup] Browser data cleared');
+            } catch(e) {
+                console.error('[Cleanup] Error:', e);
+            }
+            """
+            self.sb.execute_script(cleanup_script)
+            log("Cleanup complete")
+        except Exception as e:
+            log(f"Warning: Cleanup error - {e}")
+    
+    def find_button(self):
+        """Find final button: OPEN LINK or Download File"""
+        if not self.is_valid_session():
+            return None
+        try:
+            # Look for "OPEN LINK" button
+            if self.sb.is_element_visible("//span[contains(text(), 'OPEN LINK')]"):
+                log("Found 'OPEN LINK' button", "INFO")
+                return "//span[contains(text(), 'OPEN LINK')]/.."
+            if self.sb.is_element_visible("button:contains('OPEN LINK')"):
+                log("Found 'OPEN LINK' button", "INFO")
+                return "button:contains('OPEN LINK')"
+            if self.sb.is_element_visible("button.bg-[#1A56DB]"):
+                return "button.bg-[#1A56DB]"
+            
+            # Look for "Download File" button
+            if self.sb.is_element_visible("//a[contains(text(), 'Download File')]"):
+                log("Found 'Download File' button", "INFO")
+                return "//a[contains(text(), 'Download File')]"
+            if self.sb.is_element_visible("a:contains('Download File')"):
+                log("Found 'Download File' button", "INFO")
+                return "a:contains('Download File')"
+            # Generic download buttons
+            if self.sb.is_element_visible("//button[contains(text(), 'Download')]"):
+                log("Found 'Download' button", "INFO")
+                return "//button[contains(text(), 'Download')]"
+            if self.sb.is_element_visible("//a[contains(text(), 'Download')]"):
+                log("Found 'Download' link", "INFO")
+                return "//a[contains(text(), 'Download')]"
+                
+        except:
+            pass
+        return None
+
+    
+    def download_file(self, url):
+        """Download file via HTTP - save to current folder for easy access!"""
+        import requests
+        import os
+        
+        if any(x in url.lower() for x in ["youtube.com", "instagram.com", "facebook.com"]):
+            log("[SKIP] Not a file download URL", "INFO")
+            return
+        
+        try:
+            log(f"[DOWNLOADING] {url[:80]}...", "ACTION")
+            
+            # Define cookies and headers from current browser state
+            cookies = {c['name']: c['value'] for c in self.sb.driver.get_cookies()}
+            headers = {
+                "User-Agent": self.sb.get_user_agent(),
+                "Referer": self.sb.get_current_url()
+            }
+            
+            # Use a Session for better cookie/redirect handling
+            session = requests.Session()
+            session.cookies.update(cookies)
+            session.headers.update(headers)
+            
+            # Download using the session to ensure continuity
+            r = session.get(url, stream=True, timeout=120, allow_redirects=True)
+            
+            if r.status_code != 200:
+                log(f"HTTP Error: {r.status_code}", "ERROR")
+                return
+
+            # Best effort to find filename – if not, use a generic traffic name
+            content_disp = r.headers.get("Content-Disposition", "")
+            if "filename=" in content_disp:
+                filename = content_disp.split("filename=")[1].strip('"').strip("'")
+            else:
+                filename = url.split("/")[-1].split("?")[0] or "traffic_download.tmp"
+                if "." not in filename: filename += ".tmp"
+
+            # Save in a 'traffic' subfolder to keep thing clean
+            traffic_dir = os.path.join(os.getcwd(), "traffic")
+            if not os.path.exists(traffic_dir): os.makedirs(traffic_dir)
+            filepath = os.path.join(traffic_dir, filename)
+            
+            log(f"[TRAFFIC] Consuming stream for valid download record: {filename}", "ACTION")
+            with open(filepath, 'wb') as f:
+                downloaded = 0
+                for chunk in r.iter_content(chunk_size=131072): # Larger chunk for faster traffic
+                    if chunk:
+                        f.write(chunk)
+                        downloaded += len(chunk)
+            
+            if downloaded > 0:
+                log(f"[SUCCESS] Traffic validated: {downloaded} bytes streamed", "SUCCESS")
+                log(f"[LOG] Result saved to relative path: traffic/{filename}", "INFO")
+            else:
+                log("Download resulted in 0 bytes (server might have blocked the stream)", "ERROR")
+                
+        except Exception as e:
+            log(f"[DOWNLOAD ERROR] {e}", "ERROR")
+    
+    def run(self):
+        log("="*60)
+        log(f"STARTING SAFELINK BYPASS", "STEP")
+        log(f"Target: {TARGET_URL}", "URL")
+        log("="*60)
+        
+        # Apply stealth mode BEFORE opening URL
+        try:
+            log("Opening target URL...", "ACTION")
+            self.sb.uc_open_with_reconnect(TARGET_URL, reconnect_time=6)
+            log("Page loaded successfully", "SUCCESS")
+        except Exception as e:
+            log(f"Error opening URL: {e}", "ERROR")
+            return
+        
+        self.set_anchor()
+        self.inject_fingerprint()
+        
+        try:
+            page_title = self.sb.get_title()
+            log(f"Page title: {page_title}", "INFO")
+            if "Just a moment" in page_title or "Cloudflare" in page_title:
+                log("Cloudflare detected! Attempting bypass...", "ACTION")
+                
+                # GUI mode: Use the GUI captcha clicker
+                log("Using uc_gui_click_captcha...", "ACTION")
+                self.sb.uc_gui_click_captcha()
+                time.sleep(5)
+                log("Cloudflare bypass successful!", "SUCCESS")
+                
+                current_url = self.sb.get_current_url()
+                log(f"After Cloudflare: {current_url}", "URL")
+                self.set_anchor()
+                self.inject_fingerprint()
+        except Exception as e:
+            log(f"Cloudflare check warning: {e}", "INFO")
+
+        log("\n" + "="*60)
+        log(f"STARTING BYPASS LOOP (Max {MAX_STEPS} steps)", "STEP")
+        log("="*60 + "\n")
+        
+        # Track stuck download page
+        last_url = None
+        download_page_count = 0
+        
+        # Session-specific timing multiplier
+        session_multiplier = random.uniform(0.8, 1.4)
+        log(f"Session timing multiplier: {session_multiplier:.2f}x", "INFO")
+        
+        for step in range(1, MAX_STEPS):
+            if not self.is_valid_session():
+                log("Session lost, stopping", "ERROR")
+                break
+            
+            # Occasional human-like "distraction" pause (5% chance)
+            if step > 1 and random.random() < 0.05:
+                pause = random.uniform(10, 18)
+                log(f"Simulating human pause ({pause:.1f}s)...", "INFO")
+                time.sleep(pause)
+                
+            log(f"\n--- STEP {step}/{MAX_STEPS} ---", "STEP")
+            
+            # Just log current URL - don't check anything
+            try:
+                current_url = self.sb.get_current_url()
+                log(f"Current URL: {current_url}", "URL")
+            except Exception as e:
+                log(f"Could not get URL: {e}", "ERROR")
+            
+            # Handle popups
+            self.handle_popups()
+
+            log("Removing overlays...", "ACTION")
+            self.remove_overlays()
+            time.sleep(random.uniform(SHORT_WAIT_MIN, SHORT_WAIT_MAX))  # Random short delay
+
+            log("Searching for button...", "ACTION")
+            selector = self.find_button()
+
+            log("Searching for button...", "ACTION")
+            selector = self.find_button()
+            
+            if selector:
+                log(f"Button found: {selector[:50]}", "SUCCESS")
+                
+                # Check if this is Download File button on same URL (stuck loop)
+                try:
+                    current = self.sb.get_current_url()
+                    is_download_btn = "download" in selector.lower()
+                    
+                    if is_download_btn and current == last_url:
+                        download_page_count += 1
+                        log(f"Same download page: {download_page_count} times", "INFO")
+                        
+                        if download_page_count >= 2:
+                            # Stuck on download page - this is final URL!
+                            log("\n" + "="*60, "SUCCESS")
+                            log("DOWNLOAD PAGE DETECTED (stuck loop)", "SUCCESS")
+                            log(f"Final URL: {current}", "URL")
+                            log("="*60 + "\n", "SUCCESS")
+                            try:
+                                with open("real_link.txt", "w") as f:
+                                    f.write(current)
+                                log("Link saved to: real_link.txt", "SUCCESS")
+                            except Exception as e:
+                                log(f"Could not save: {e}", "ERROR")
+                            
+                            # V6.PY: Download file via HTTP (no Chrome popup!)
+                            self.download_file(current)
+                            
+                            # Exit loop - download complete
+                            return
+                    else:
+                        download_page_count = 0  # Reset if URL changed
+                        last_url = current
+                except:
+                    pass
+                
+                try:
+                    self.remove_overlays()
+                    if self.sb.is_element_visible(selector):
+                        log("Clicking button (1/2)...", "ACTION")
+                        self.sb.click(selector)
+                        log("First click successful!", "SUCCESS")
+                        
+                        # Use jittered sleep
+                        wait_time = jitter_sleep(1.5, 3.5, session_multiplier)
+                        log(f"Waiting {wait_time:.1f}s (jittered)...", "INFO")
+                        
+                        # Show URL after first click
+                        try:
+                            url_after_click = self.sb.get_current_url()
+                            log(f"URL after click: {url_after_click}", "URL")
+                            
+                            # IMPORTANT: Check if this is download URL immediately!
+                            url_lower = url_after_click.lower()
+                            is_download_url = any([
+                                "/download?" in url_lower,
+                                "downloadku.com" in url_lower,
+                                "cloudflarestorage.com" in url_lower,
+                                "response-content-disposition=attachment" in url_lower,
+                            ])
+                            
+                            if is_download_url:
+                                # Download URL detected! Download immediately - don't wait!
+                                log("\n" + "="*60, "SUCCESS")
+                                log("DOWNLOAD URL DETECTED!", "SUCCESS")
+                                log(f"Final URL: {url_after_click}", "URL")
+                                log("="*60 + "\n", "SUCCESS")
+                                
+                                # Save URL
+                                try:
+                                    with open("real_link.txt", "w") as f:
+                                        f.write(url_after_click)
+                                    log("Link saved to: real_link.txt", "SUCCESS")
+                                except:
+                                    pass
+                                
+                                # Download file via HTTP (no Chrome popup!)
+                                self.download_file(url_after_click)
+                                
+                                # STOP - download complete!
+                                return
+                        except:
+                            pass
+                        
+                        self.handle_popups()
+                        
+                        try:
+                            el_text = self.sb.get_text(selector).lower() if self.sb.is_element_visible(selector) else "link"
+                        except:
+                            el_text = "link"
+                            
+                        if "link" in el_text or "open" in el_text:
+                            log("Button requires double-click, preparing...", "INFO")
+                            time.sleep(5)
+                            self.back_to_anchor()
+                            self.remove_overlays()
+                            
+                            if not self.sb.is_element_visible(selector):
+                                log("Re-searching for button...", "ACTION")
+                                selector = self.find_button()
+                            
+                            if selector and self.sb.click_if_visible(selector):
+                                log("Clicking button (2/2)...", "ACTION")
+                                log("Second click successful!", "SUCCESS")
+                                try:
+                                    url_after_second = self.sb.get_current_url()
+                                    log(f"URL after 2nd click: {url_after_second}", "URL")
+                                except:
+                                    pass
+                        
+                        # Dynamic wait before next step
+                        wait_time = jitter_sleep(WAIT_MIN, WAIT_MAX, session_multiplier)
+                        log(f"Waiting {wait_time:.1f}s before next step...", "INFO")
+                except Exception as e:
+                    log(f"Error clicking: {str(e)[:50]}", "ERROR")
+            else:
+                log("No button found, trying fallback selectors...", "INFO")
+                targets = ["//span[contains(text(), 'OPEN LINK')]/..", "a:contains('Open')", "a:contains('Link')"]
+                for i, t in enumerate(targets, 1):
+                    try:
+                        log(f"Trying fallback {i}/{len(targets)}: {t[:40]}...", "ACTION")
+                        if self.sb.click_if_visible(t):
+                            log(f"Fallback click successful!", "SUCCESS")
+                            # Random wait
+                            wait_time = random.uniform(WAIT_MIN, WAIT_MAX)
+                            time.sleep(wait_time)
+                            break
+                    except:
+                        continue
+        
+        # Final status - save whatever URL we ended at
+        log("\n" + "="*60, "INFO")
+        log("Bypass loop completed - saving final URL", "INFO")
+        try:
+            final_url = self.sb.get_current_url()
+            log(f"Final URL: {final_url}", "URL")
+            # Always save final URL
+            with open("real_link.txt", "w") as f:
+                f.write(final_url)
+            log("Final URL saved to: real_link.txt", "SUCCESS")
+        except Exception as e:
+            log(f"Could not retrieve/save final URL: {e}", "ERROR")
+        log("="*60 + "\n", "INFO")
+        
+        # Cleanup at the end
+        self.cleanup_browser_data()
+
+def main():
+    log("="*60, "INFO")
+    log("WINDOWS VPS GUI MODE", "INFO")
+    log("="*60 + "\n", "INFO")
+    
+    config = {
+        "uc": True,
+        "incognito": True,
+        "headless": False,
+        "chromium_arg": "--disable-gpu,--no-sandbox,--disable-dev-shm-usage"
+    }
+    
+    log("Note: Downloads will trigger browser's default save dialog", "INFO")
+    log("Bot will detect download page and stop loop automatically\n", "INFO")
+    
+    try:
+        with SB(**config) as sb:
+            bot = SafelinkBypass(sb)
+            bot.run()
+    except KeyboardInterrupt:
+        log("Stopped by user", "INFO")
+    except Exception as e:
+        log(f"Fatal error: {e}", "ERROR")
+
+if __name__ == "__main__":
+    main()
